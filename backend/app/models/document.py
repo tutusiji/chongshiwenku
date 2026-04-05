@@ -11,6 +11,8 @@ from app.models.enums import DocumentPreviewStatus, ResourceStatus, ResourceVisi
 
 if TYPE_CHECKING:
     from app.models.document_asset import DocumentAsset
+    from app.models.document_coin_record import DocumentCoinRecord
+    from app.models.document_like import DocumentLike
     from app.models.document_version import DocumentVersion
     from app.models.group import Group
     from app.models.user import User
@@ -44,7 +46,9 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=DocumentPreviewStatus.PENDING,
     )
     allow_download: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    view_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    read_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    like_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    coin_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     download_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     extra_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
@@ -55,6 +59,14 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
     )
     assets: Mapped[list["DocumentAsset"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
+    likes: Mapped[list["DocumentLike"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
+    coin_records: Mapped[list["DocumentCoinRecord"]] = relationship(
         back_populates="document",
         cascade="all, delete-orphan",
     )

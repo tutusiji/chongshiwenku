@@ -10,9 +10,14 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import UserStatus
 
 if TYPE_CHECKING:
+    from app.models.coin_ledger import CoinLedger
     from app.models.document import Document
+    from app.models.document_coin_record import DocumentCoinRecord
+    from app.models.document_like import DocumentLike
     from app.models.group import Group
     from app.models.group_member import GroupMember
+    from app.models.user_checkin import UserCheckin
+    from app.models.user_coin_account import UserCoinAccount
 
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -35,3 +40,31 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     owned_groups: Mapped[list["Group"]] = relationship(back_populates="owner")
     group_memberships: Mapped[list["GroupMember"]] = relationship(back_populates="user")
     uploaded_documents: Mapped[list["Document"]] = relationship(back_populates="owner")
+    coin_account: Mapped["UserCoinAccount | None"] = relationship(
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    coin_ledgers: Mapped[list["CoinLedger"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="CoinLedger.user_id",
+    )
+    checkins: Mapped[list["UserCheckin"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    liked_documents: Mapped[list["DocumentLike"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    sent_coin_records: Mapped[list["DocumentCoinRecord"]] = relationship(
+        back_populates="sender_user",
+        cascade="all, delete-orphan",
+        foreign_keys="DocumentCoinRecord.sender_user_id",
+    )
+    received_coin_records: Mapped[list["DocumentCoinRecord"]] = relationship(
+        back_populates="receiver_user",
+        cascade="all, delete-orphan",
+        foreign_keys="DocumentCoinRecord.receiver_user_id",
+    )

@@ -53,3 +53,12 @@ class ACLPermissionType(StrEnum):
     VIEW = "view"
     DOWNLOAD = "download"
     MANAGE = "manage"
+
+
+class CoinLedgerSource(StrEnum):
+    REGISTER_BONUS = "register_bonus"
+    DAILY_CHECKIN_REWARD = "daily_checkin_reward"
+    UPLOAD_REWARD = "upload_reward"
+    DOCUMENT_COIN_SPEND = "document_coin_spend"
+    DOCUMENT_COIN_INCOME = "document_coin_income"
+    ADMIN_ADJUSTMENT = "admin_adjustment"

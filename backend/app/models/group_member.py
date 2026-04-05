@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Enum as SQLEnum, ForeignKey, UniqueConstraint
+from sqlalchemy import DateTime, Enum as SQLEnum, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -26,6 +27,11 @@ class GroupMember(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         SQLEnum(GroupRole, name="group_role"),
         nullable=False,
         default=GroupRole.MEMBER,
+    )
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
     group: Mapped["Group"] = relationship(back_populates="members")

@@ -6,6 +6,7 @@
 - 环境配置加载
 - 数据库会话管理
 - 核心领域模型骨架
+- 积分、签到、点赞、投币相关模型骨架
 
 ## 本地启动
 
@@ -25,6 +26,7 @@ backend
 │  ├─ core/              # 配置与通用能力
 │  ├─ db/                # 数据库会话与模型注册
 │  ├─ models/            # SQLAlchemy 领域模型
+│  ├─ services/          # 后续业务服务层预留
 │  └─ schemas/           # Pydantic 模式
 ├─ tests/                # 最小测试
 ├─ .env.example          # 环境变量示例
