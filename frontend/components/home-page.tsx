@@ -73,11 +73,14 @@ export function HomePage() {
               <Button size="large" icon={<TrophyOutlined />} href="/groups/new">
                 创建资料组
               </Button>
+              <Button size="large" href="/me/coins">
+                积分中心
+              </Button>
             </Space>
           </div>
 
           <Card
-            bordered={false}
+            variant="borderless"
             className="rounded-[24px] bg-[#132238] text-white shadow-[0_22px_80px_rgba(19,34,56,0.28)]"
             styles={{ body: { padding: 28 } }}
           >
@@ -113,7 +116,7 @@ export function HomePage() {
         {featureCards.map((item) => (
           <Card
             key={item.title}
-            bordered={false}
+            variant="borderless"
             className="panel-shell rounded-[26px]"
             styles={{ body: { padding: 28 } }}
           >
@@ -158,7 +161,7 @@ export function HomePage() {
       </section>
 
       <section className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-        <Card bordered={false} className="panel-shell rounded-[28px]" styles={{ body: { padding: 28 } }}>
+        <Card variant="borderless" className="panel-shell rounded-[28px]" styles={{ body: { padding: 28 } }}>
           <Typography.Title className="section-title !mb-4">信息架构方向</Typography.Title>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl bg-[#f7efe2] p-5">
@@ -185,7 +188,7 @@ export function HomePage() {
         </Card>
 
         <Card
-          bordered={false}
+          variant="borderless"
           className="rounded-[28px] border-0 bg-[#3c2a21] text-white shadow-[0_28px_90px_rgba(60,42,33,0.26)]"
           styles={{ body: { padding: 28 } }}
         >

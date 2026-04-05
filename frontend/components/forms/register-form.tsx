@@ -1,7 +1,10 @@
 "use client";
 
 import { LockOutlined, MailOutlined, SafetyCertificateOutlined, UserAddOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Form, Input, Typography } from "antd";
+import { Alert, Button, Form, Input, Typography } from "antd";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { requestJson } from "@/lib/api";
 
 type RegisterFormValues = {
   username: string;
@@ -10,15 +13,41 @@ type RegisterFormValues = {
   confirmPassword: string;
 };
 
+type RegisterResponse = {
+  message: string;
+};
+
 export function RegisterForm() {
   const [form] = Form.useForm<RegisterFormValues>();
+  const router = useRouter();
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleFinish = (values: RegisterFormValues) => {
-    console.log("register-submit", values);
+  const handleFinish = async (values: RegisterFormValues) => {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await requestJson<RegisterResponse>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          username: values.username,
+          email: values.email,
+          password: values.password,
+          nickname: values.username,
+        }),
+      });
+      router.push("/auth/login");
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "注册失败");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <Form<RegisterFormValues> form={form} layout="vertical" size="large" onFinish={handleFinish}>
+      {submitError ? <Alert className="!mb-4" type="error" showIcon message={submitError} /> : null}
+
       <Form.Item
         label="用户名"
         name="username"
@@ -72,13 +101,13 @@ export function RegisterForm() {
       </Form.Item>
 
       <Form.Item className="!mb-0">
-        <Button type="primary" htmlType="submit" block icon={<UserAddOutlined />}>
+        <Button type="primary" htmlType="submit" block icon={<UserAddOutlined />} loading={submitting}>
           注册并领取 100 币
         </Button>
       </Form.Item>
 
       <Typography.Paragraph className="!mb-0 !mt-4 !text-sm !text-ink-soft">
-        注册成功后将自动创建积分账户，并发放 100 个初始币。
+        注册成功后会自动创建积分账户，并发放 100 个初始币。
       </Typography.Paragraph>
     </Form>
   );

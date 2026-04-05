@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", validation_alias=AliasChoices("APP_ENVIRONMENT"))
     debug: bool = Field(default=True, validation_alias=AliasChoices("APP_DEBUG"))
     api_v1_prefix: str = Field(default="/api/v1", validation_alias=AliasChoices("APP_API_V1_PREFIX"))
+    auto_create_tables: bool = Field(default=False, validation_alias=AliasChoices("APP_AUTO_CREATE_TABLES"))
+    jwt_secret_key: str = Field(default="dev-secret-key", validation_alias=AliasChoices("APP_JWT_SECRET_KEY"))
+    jwt_algorithm: str = Field(default="HS256", validation_alias=AliasChoices("APP_JWT_ALGORITHM"))
+    access_token_expire_minutes: int = Field(
+        default=120,
+        validation_alias=AliasChoices("APP_ACCESS_TOKEN_EXPIRE_MINUTES"),
+    )
 
     postgres_dsn: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/chongshiwenku",

@@ -1,7 +1,10 @@
 "use client";
 
 import { LockOutlined, LoginOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Checkbox, Form, Input, Typography } from "antd";
+import { Alert, Button, Checkbox, Form, Input, Typography } from "antd";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { requestJson, setStoredAccessToken } from "@/lib/api";
 
 type LoginFormValues = {
   account: string;
@@ -9,11 +12,43 @@ type LoginFormValues = {
   remember: boolean;
 };
 
+type LoginResponse = {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: {
+    username: string;
+    nickname: string;
+  };
+  coin_account: {
+    balance: number;
+  };
+};
+
 export function LoginForm() {
   const [form] = Form.useForm<LoginFormValues>();
+  const router = useRouter();
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleFinish = (values: LoginFormValues) => {
-    console.log("login-submit", values);
+  const handleFinish = async (values: LoginFormValues) => {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const response = await requestJson<LoginResponse>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          account: values.account,
+          password: values.password,
+        }),
+      });
+      setStoredAccessToken(response.access_token);
+      router.push("/me/coins");
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "登录失败");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -24,6 +59,8 @@ export function LoginForm() {
       initialValues={{ remember: true }}
       onFinish={handleFinish}
     >
+      {submitError ? <Alert className="!mb-4" type="error" showIcon message={submitError} /> : null}
+
       <Form.Item
         label="账号"
         name="account"
@@ -45,13 +82,13 @@ export function LoginForm() {
       </Form.Item>
 
       <Form.Item className="!mb-0">
-        <Button type="primary" htmlType="submit" block icon={<LoginOutlined />}>
+        <Button type="primary" htmlType="submit" block icon={<LoginOutlined />} loading={submitting}>
           登录
         </Button>
       </Form.Item>
 
       <Typography.Paragraph className="!mb-0 !mt-4 !text-sm !text-ink-soft">
-        当前为前端表单骨架，后续将接入真实登录 API。
+        登录成功后会把访问令牌暂存在浏览器本地，并跳转到积分中心。
       </Typography.Paragraph>
     </Form>
   );
