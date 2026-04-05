@@ -1,7 +1,7 @@
-const config = {
+export default {
   plugins: {
-    "@unocss/postcss": {},
+    "./unocss-postcss-plugin.cjs": {
+      content: ["./app/**/*.{html,js,ts,jsx,tsx}", "./components/**/*.{html,js,ts,jsx,tsx}"],
+    },
   },
 };
-
-export default config;

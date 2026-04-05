@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Card, Col, Divider, Progress, Row, Space, Tag, Typography } from "antd";
+import { FormOutlined, LoginOutlined, TrophyOutlined } from "@ant-design/icons";
 
 const featureCards = [
   {
@@ -18,13 +19,19 @@ const featureCards = [
     title: "组内协作",
     description: "通过课件组、文档组、考研组等自定义分组，让资料沉淀和共享都更顺手。",
   },
+  {
+    icon: "i-lucide-coins",
+    title: "积分激励",
+    description: "注册赠币、每日签到、上传奖励与文档投币共同构成首版活跃体系。",
+  },
 ];
 
 const phaseItems = [
+  "积分账户、签到、点赞与投币",
   "账号体系与组管理",
   "文档上传、版本与预览链路",
   "ACL 权限模型与访问判定",
-  "后台管理、审计日志与搜索能力",
+  "后台管理、审计日志与搜索能力"
 ];
 
 export function HomePage() {
@@ -57,10 +64,15 @@ export function HomePage() {
             </div>
 
             <Space size="middle" wrap>
-              <Button type="primary" size="large">
-                开始实现注册登录
+              <Button type="primary" size="large" icon={<LoginOutlined />} href="/auth/login">
+                登录表单
               </Button>
-              <Button size="large">继续补文档上传模块</Button>
+              <Button size="large" icon={<FormOutlined />} href="/auth/register">
+                注册表单
+              </Button>
+              <Button size="large" icon={<TrophyOutlined />} href="/groups/new">
+                创建资料组
+              </Button>
             </Space>
           </div>
 
@@ -87,10 +99,10 @@ export function HomePage() {
               </div>
               <div>
                 <div className="mb-2 flex items-center justify-between text-sm text-white/85">
-                  <span>上传与权限业务实现</span>
-                  <span>15%</span>
+                  <span>上传、互动与权限业务实现</span>
+                  <span>20%</span>
                 </div>
-                <Progress percent={15} showInfo={false} strokeColor="#efb655" trailColor="rgba(255,255,255,0.12)" />
+                <Progress percent={20} showInfo={false} strokeColor="#efb655" trailColor="rgba(255,255,255,0.12)" />
               </div>
             </div>
           </Card>
@@ -154,7 +166,7 @@ export function HomePage() {
                 用户端
               </Typography.Title>
               <Typography.Paragraph className="!mb-0 !text-ink-soft">
-                首页、搜索、文档详情、在线阅读、我的上传、我的组、个人中心。
+                首页、搜索、文档详情、在线阅读、我的上传、我的组、个人中心、积分中心、签到。
               </Typography.Paragraph>
             </div>
             <div className="rounded-2xl bg-[#eef7f6] p-5">
@@ -181,11 +193,11 @@ export function HomePage() {
           <div className="grid gap-3">
             <div className="rounded-2xl bg-white/10 px-4 py-4">
               <div className="mb-1 text-sm text-white/70">P0</div>
-              <div className="text-base text-white">注册登录、用户模型、JWT 或会话体系</div>
+              <div className="text-base text-white">注册登录、用户模型、JWT 或会话体系、初始积分</div>
             </div>
             <div className="rounded-2xl bg-white/10 px-4 py-4">
               <div className="mb-1 text-sm text-white/70">P1</div>
-              <div className="text-base text-white">资料组 CRUD、成员管理、权限边界校验</div>
+              <div className="text-base text-white">签到、积分流水、点赞投币与资料组权限边界校验</div>
             </div>
             <div className="rounded-2xl bg-white/10 px-4 py-4">
               <div className="mb-1 text-sm text-white/70">P2</div>

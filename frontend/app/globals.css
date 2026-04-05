@@ -1,3 +1,5 @@
+@unocss all;
+
 :root {
   --font-sans: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-serif: "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif;

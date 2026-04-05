@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
 import "@unocss/reset/tailwind.css";
-import "uno.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
