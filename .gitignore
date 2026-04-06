@@ -48,3 +48,7 @@ coverage/
 # Infrastructure data
 infra/data/
 infra/minio/
+books/
+backend/storage/documents/
+frontend/.next-build/
+frontend/.next-dev/

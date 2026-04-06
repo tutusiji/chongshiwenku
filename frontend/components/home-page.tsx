@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Card, Col, Divider, Progress, Row, Space, Tag, Typography } from "antd";
-import { FormOutlined, LoginOutlined, TrophyOutlined } from "@ant-design/icons";
+import { FileAddOutlined, FileTextOutlined, FormOutlined, LoginOutlined, TeamOutlined, TrophyOutlined } from "@ant-design/icons";
 
 const featureCards = [
   {
@@ -72,6 +72,15 @@ export function HomePage() {
               </Button>
               <Button size="large" icon={<TrophyOutlined />} href="/groups/new">
                 创建资料组
+              </Button>
+              <Button size="large" icon={<TeamOutlined />} href="/me/groups">
+                我的资料组
+              </Button>
+              <Button size="large" icon={<FileAddOutlined />} href="/documents/new">
+                上传文档
+              </Button>
+              <Button size="large" icon={<FileTextOutlined />} href="/me/documents">
+                我的文档
               </Button>
               <Button size="large" href="/me/coins">
                 积分中心

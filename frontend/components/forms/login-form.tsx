@@ -1,7 +1,7 @@
 "use client";
 
 import { LockOutlined, LoginOutlined, UserOutlined } from "@ant-design/icons";
-import { Alert, Button, Checkbox, Form, Input, Typography } from "antd";
+import { Alert, Button, Checkbox, Form, Input, Space, Typography } from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { requestJson, setStoredAccessToken } from "@/lib/api";
@@ -87,9 +87,20 @@ export function LoginForm() {
         </Button>
       </Form.Item>
 
-      <Typography.Paragraph className="!mb-0 !mt-4 !text-sm !text-ink-soft">
-        登录成功后会把访问令牌暂存在浏览器本地，并跳转到积分中心。
-      </Typography.Paragraph>
+      <Form.Item className="!mb-0 !mt-3">
+        <Button block href="/auth/register">
+          还没有账号，去注册
+        </Button>
+      </Form.Item>
+
+      <Space direction="vertical" size={6} className="!mt-4">
+        <Typography.Paragraph className="!mb-0 !text-sm !text-ink-soft">
+          登录成功后会把访问令牌暂存在浏览器本地，并跳转到积分中心。
+        </Typography.Paragraph>
+        <Typography.Paragraph className="!mb-0 !text-sm !text-ink-soft">
+          如果还没有账号，可以直接点击上面的“去注册”完成新用户注册。
+        </Typography.Paragraph>
+      </Space>
     </Form>
   );
 }

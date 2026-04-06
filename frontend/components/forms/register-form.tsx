@@ -1,7 +1,7 @@
 "use client";
 
 import { LockOutlined, MailOutlined, SafetyCertificateOutlined, UserAddOutlined, UserOutlined } from "@ant-design/icons";
-import { Alert, Button, Form, Input, Typography } from "antd";
+import { Alert, Button, Form, Input, Space, Typography } from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { requestJson } from "@/lib/api";
@@ -106,9 +106,20 @@ export function RegisterForm() {
         </Button>
       </Form.Item>
 
-      <Typography.Paragraph className="!mb-0 !mt-4 !text-sm !text-ink-soft">
-        注册成功后会自动创建积分账户，并发放 100 个初始币。
-      </Typography.Paragraph>
+      <Form.Item className="!mb-0 !mt-3">
+        <Button block href="/auth/login">
+          已有账号，去登录
+        </Button>
+      </Form.Item>
+
+      <Space direction="vertical" size={6} className="!mt-4">
+        <Typography.Paragraph className="!mb-0 !text-sm !text-ink-soft">
+          注册成功后会自动创建积分账户，并发放 100 个初始币。
+        </Typography.Paragraph>
+        <Typography.Paragraph className="!mb-0 !text-sm !text-ink-soft">
+          如果你已经有账号，可以直接点击上面的“去登录”进入登录页。
+        </Typography.Paragraph>
+      </Space>
     </Form>
   );
 }
