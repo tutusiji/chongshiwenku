@@ -5,12 +5,13 @@ import secrets
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.security import hash_password
 from app.models.access_passcode import AccessPasscode
 from app.models.acl_entry import ACLEntry
+from app.models.document import Document
 from app.models.enums import ACLPermissionType, ACLSubjectType, GroupRole, ResourceVisibility
 from app.models.group import Group
 from app.models.group_member import GroupMember
@@ -49,6 +50,34 @@ def ensure_group_exists(db: Session, group_id: UUID) -> Group:
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="资料组不存在")
     return group
+
+
+def resolve_parent_group(
+    db: Session,
+    *,
+    current_user: User,
+    parent_group_id: UUID | None,
+    current_group_id: UUID | None = None,
+) -> Group | None:
+    if parent_group_id is None:
+        return None
+
+    parent_group = ensure_group_exists(db, parent_group_id)
+    ensure_can_manage_group(db, parent_group, current_user)
+
+    if current_group_id is None:
+        return parent_group
+
+    if parent_group.id == current_group_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="资料组不能把自己设为父级")
+
+    ancestor = parent_group.parent_group
+    while ancestor is not None:
+        if ancestor.id == current_group_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="资料组父级关系存在循环，请重新选择")
+        ancestor = ancestor.parent_group
+
+    return parent_group
 
 
 def ensure_can_manage_group(db: Session, group: Group, current_user: User) -> GroupRole:
@@ -206,6 +235,7 @@ def create_group(
     *,
     current_user: User,
     name: str,
+    parent_group_id: UUID | None,
     description: str | None,
     visibility_mode: ResourceVisibility,
     allow_member_invite: bool,
@@ -213,8 +243,10 @@ def create_group(
     password_hint: str | None,
     specific_usernames: list[str],
 ) -> Group:
+    parent_group = resolve_parent_group(db, current_user=current_user, parent_group_id=parent_group_id)
     group = Group(
         owner_id=current_user.id,
+        parent_group_id=parent_group.id if parent_group is not None else None,
         name=name,
         slug=generate_group_slug(name),
         description=description,
@@ -254,19 +286,30 @@ def update_group(
     db: Session,
     *,
     group: Group,
+    current_user: User,
     name: str | None,
+    parent_group_id: UUID | None,
     description: str | None,
     visibility_mode: ResourceVisibility | None,
     allow_member_invite: bool | None,
     password: str | None,
     password_hint: str | None,
     specific_usernames: list[str] | None,
+    parent_group_id_provided: bool = False,
     password_provided: bool = False,
     password_hint_provided: bool = False,
     specific_usernames_provided: bool = False,
 ) -> Group:
     if name is not None:
         group.name = name
+    if parent_group_id_provided:
+        parent_group = resolve_parent_group(
+            db,
+            current_user=current_user,
+            parent_group_id=parent_group_id,
+            current_group_id=group.id,
+        )
+        group.parent_group_id = parent_group.id if parent_group is not None else None
     if description is not None:
         group.description = description
     if allow_member_invite is not None:
@@ -297,6 +340,12 @@ def update_group(
 
 
 def delete_group(db: Session, group: Group) -> None:
+    db.execute(
+        update(Group).where(Group.parent_group_id == group.id).values(parent_group_id=None)
+    )
+    db.execute(
+        update(Document).where(Document.group_id == group.id).values(group_id=None)
+    )
     db.execute(
         delete(ACLEntry).where(
             ACLEntry.resource_type == "group",

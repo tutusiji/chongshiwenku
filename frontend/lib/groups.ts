@@ -28,6 +28,7 @@ export type GroupMember = {
 
 export type GroupSummary = {
   id: string;
+  parent_group_id?: string | null;
   name: string;
   slug: string;
   description: string | null;
@@ -50,6 +51,13 @@ export type GroupDetail = GroupSummary & {
 
 export type GroupListResponse = {
   items: GroupSummary[];
+};
+
+export type GroupTreeNode = {
+  title: string;
+  value: string;
+  key: string;
+  children?: GroupTreeNode[];
 };
 
 export const visibilityOptions = [
@@ -90,4 +98,47 @@ export function normalizeUsernameTags(values: string[] | undefined): string[] {
         .filter(Boolean),
     ),
   );
+}
+
+export function buildGroupTree(groups: GroupSummary[]): GroupTreeNode[] {
+  const nodeMap = new Map<string, GroupTreeNode>();
+  const rootNodes: GroupTreeNode[] = [];
+
+  for (const group of groups) {
+    nodeMap.set(group.id, {
+      title: group.name,
+      value: group.id,
+      key: group.id,
+      children: [],
+    });
+  }
+
+  for (const group of groups) {
+    const currentNode = nodeMap.get(group.id);
+    if (!currentNode) {
+      continue;
+    }
+
+    const parentId = group.parent_group_id ?? null;
+    if (parentId && nodeMap.has(parentId) && parentId !== group.id) {
+      nodeMap.get(parentId)?.children?.push(currentNode);
+      continue;
+    }
+
+    rootNodes.push(currentNode);
+  }
+
+  const sortNodes = (nodes: GroupTreeNode[]) => {
+    nodes.sort((left, right) => left.title.localeCompare(right.title, "zh-CN"));
+    for (const node of nodes) {
+      if (node.children?.length) {
+        sortNodes(node.children);
+      } else {
+        delete node.children;
+      }
+    }
+  };
+
+  sortNodes(rootNodes);
+  return rootNodes;
 }

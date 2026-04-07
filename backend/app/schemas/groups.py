@@ -31,6 +31,7 @@ class GroupMemberResponse(BaseModel):
 
 class GroupResponse(BaseModel):
     id: UUID
+    parent_group_id: UUID | None
     name: str
     slug: str
     description: str | None
@@ -57,6 +58,7 @@ class GroupListResponse(BaseModel):
 
 class GroupCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
+    parent_group_id: UUID | None = None
     description: str | None = Field(default=None, max_length=1000)
     visibility_mode: str = Field(default="public")
     allow_member_invite: bool = True
@@ -67,6 +69,7 @@ class GroupCreateRequest(BaseModel):
 
 class GroupUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
+    parent_group_id: UUID | None = None
     description: str | None = Field(default=None, max_length=1000)
     visibility_mode: str | None = None
     allow_member_invite: bool | None = None

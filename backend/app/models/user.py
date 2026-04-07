@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum as SQLEnum, String, Text
+from sqlalchemy import Boolean, DateTime, Enum as SQLEnum, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -30,6 +30,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     nickname: Mapped[str] = mapped_column(String(80), nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[UserStatus] = mapped_column(
         SQLEnum(UserStatus, name="user_status"),
         nullable=False,

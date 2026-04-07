@@ -4,7 +4,7 @@ import { LockOutlined, LoginOutlined, UserOutlined } from "@ant-design/icons";
 import { Alert, Button, Checkbox, Form, Input, Space, Typography } from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { requestJson, setStoredAccessToken } from "@/lib/api";
+import { requestJson, setStoredAuthSession } from "@/lib/api";
 
 type LoginFormValues = {
   account: string;
@@ -17,8 +17,11 @@ type LoginResponse = {
   token_type: string;
   expires_in: number;
   user: {
+    id: string;
     username: string;
+    email?: string | null;
     nickname: string;
+    is_admin?: boolean;
   };
   coin_account: {
     balance: number;
@@ -42,8 +45,9 @@ export function LoginForm() {
           password: values.password,
         }),
       });
-      setStoredAccessToken(response.access_token);
-      router.push("/me/coins");
+      setStoredAuthSession(response.access_token, response.user);
+      router.push("/me");
+      router.refresh();
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "登录失败");
     } finally {

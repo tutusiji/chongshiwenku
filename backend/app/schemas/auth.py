@@ -29,6 +29,7 @@ class UserResponse(BaseModel):
     nickname: str
     avatar_url: str | None
     bio: str | None
+    is_admin: bool
     status: str
     created_at: datetime
     updated_at: datetime

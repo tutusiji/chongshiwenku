@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
+import { AppProviders } from "@/components/app-providers";
+import { SiteChrome } from "@/components/site-chrome";
 import "@unocss/reset/tailwind.css";
 import "./globals.css";
 
@@ -17,7 +19,11 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
-        <AntdRegistry>{children}</AntdRegistry>
+        <AntdRegistry>
+          <AppProviders>
+            <SiteChrome>{children}</SiteChrome>
+          </AppProviders>
+        </AntdRegistry>
       </body>
     </html>
   );

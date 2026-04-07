@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeftOutlined,
   BookOutlined,
@@ -8,6 +8,7 @@ import {
   CopyOutlined,
   DownloadOutlined,
   EyeOutlined,
+  FullscreenExitOutlined,
   FullscreenOutlined,
   HeartFilled,
   HeartOutlined,
@@ -126,9 +127,11 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
   const [previewText, setPreviewText] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewContentType, setPreviewContentType] = useState<string | null>(null);
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [relatedError, setRelatedError] = useState<string | null>(null);
   const [relatedDocuments, setRelatedDocuments] = useState<DocumentSummary[]>([]);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
 
   const loadDetail = async (password: string | null = accessPassword) => {
     const token = getStoredAccessToken();
@@ -329,6 +332,17 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
     documentId,
   ]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setPreviewFullscreen(document.fullscreenElement === previewContainerRef.current);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
   const handleAccessSubmit = async (values: AccessFormValues) => {
     const password = values.accessPassword.trim();
     await loadDetail(password);
@@ -463,6 +477,23 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
     }
   };
 
+  const handleTogglePreviewFullscreen = async () => {
+    const previewElement = previewContainerRef.current;
+    if (!previewElement) {
+      return;
+    }
+
+    try {
+      if (document.fullscreenElement === previewElement) {
+        await document.exitFullscreen();
+        return;
+      }
+      await previewElement.requestFullscreen();
+    } catch {
+      messageApi.warning("当前浏览器暂不支持全屏预览，可以改用外部打开。");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#eef2f7] text-[#17314c]">
       {contextHolder}
@@ -560,7 +591,7 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
                     </span>
                     <span className="flex items-center gap-2">
                       <UserOutlined />
-                      {detail.owner.nickname}
+                      {detail.owner.username}
                     </span>
                     <span className="flex items-center gap-2">
                       <CalendarOutlined />
@@ -610,13 +641,22 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
                     >
                       重新载入
                     </Button>
+                    <Button
+                      icon={previewFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                      onClick={() => void handleTogglePreviewFullscreen()}
+                    >
+                      {previewFullscreen ? "退出全屏" : "全屏预览"}
+                    </Button>
                     <Button icon={<EyeOutlined />} onClick={() => void handleOpenFile(true)}>
                       外部打开
                     </Button>
                   </Space>
                 </div>
 
-                <div className="bg-[linear-gradient(180deg,#f4f7fb_0%,#eef3f9_100%)] p-4 md:p-6">
+                <div
+                  ref={previewContainerRef}
+                  className="bg-[linear-gradient(180deg,#f4f7fb_0%,#eef3f9_100%)] p-4 md:p-6"
+                >
                   {previewLoading ? (
                     <div className="flex h-[78vh] min-h-[760px] items-center justify-center rounded-[26px] border border-[#dae5f3] bg-white">
                       <Space direction="vertical" size={18} align="center">
@@ -708,7 +748,7 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
                 </Typography.Title>
                 <Descriptions column={1} size="small" labelStyle={{ width: 96, color: "#6a7d95" }}>
                   <Descriptions.Item label="上传者">
-                    {detail.owner.nickname}（{detail.owner.username}）
+                    {detail.owner.username}
                   </Descriptions.Item>
                   <Descriptions.Item label="分类">{detail.category || "-"}</Descriptions.Item>
                   <Descriptions.Item label="文件名">{detail.file_name}</Descriptions.Item>

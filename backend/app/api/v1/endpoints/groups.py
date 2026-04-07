@@ -81,6 +81,7 @@ def build_group_response(db: Session, group: Group, current_user: User) -> Group
 
     return GroupResponse(
         id=group.id,
+        parent_group_id=group.parent_group_id,
         name=group.name,
         slug=group.slug,
         description=group.description,
@@ -117,6 +118,7 @@ def create_new_group(
         db,
         current_user=current_user,
         name=payload.name,
+        parent_group_id=payload.parent_group_id,
         description=payload.description,
         visibility_mode=parse_visibility_mode(payload.visibility_mode),
         allow_member_invite=payload.allow_member_invite,
@@ -165,13 +167,16 @@ def patch_group(
     updated_group = update_group(
         db,
         group=group,
+        current_user=current_user,
         name=payload.name,
+        parent_group_id=payload.parent_group_id,
         description=payload.description,
         visibility_mode=parse_visibility_mode(payload.visibility_mode) if payload.visibility_mode else None,
         allow_member_invite=payload.allow_member_invite,
         password=payload.password,
         password_hint=payload.password_hint,
         specific_usernames=payload.specific_usernames,
+        parent_group_id_provided="parent_group_id" in provided_fields,
         password_provided="password" in provided_fields,
         password_hint_provided="password_hint" in provided_fields,
         specific_usernames_provided="specific_usernames" in provided_fields,

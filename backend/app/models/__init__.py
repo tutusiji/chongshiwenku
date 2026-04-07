@@ -1,3 +1,4 @@
+from app.models.ai_provider_config import AIProviderConfig
 from app.models.access_passcode import AccessPasscode
 from app.models.acl_entry import ACLEntry
 from app.models.coin_ledger import CoinLedger
@@ -13,6 +14,7 @@ from app.models.user_checkin import UserCheckin
 from app.models.user_coin_account import UserCoinAccount
 
 __all__ = [
+    "AIProviderConfig",
     "AccessPasscode",
     "ACLEntry",
     "CoinLedger",

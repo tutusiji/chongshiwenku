@@ -4,6 +4,7 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -11,7 +12,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.business_rules import UPLOAD_REWARD_COINS
@@ -28,6 +29,7 @@ from app.models.enums import ACLPermissionType, ACLSubjectType, CoinLedgerSource
 from app.models.group import Group
 from app.models.group_member import GroupMember
 from app.models.user import User
+from app.services.ai import maybe_generate_document_summary
 from app.services.coins import get_or_create_coin_account
 from app.services.groups import ensure_group_exists, resolve_users_by_usernames
 
@@ -51,6 +53,13 @@ TEXT_PREVIEW_EXTENSIONS = {"txt", "md", "csv", "json", "log"}
 def sanitize_file_name(file_name: str) -> str:
     cleaned = re.sub(r"[^\w.\-()\u4e00-\u9fff]+", "_", file_name).strip("._")
     return cleaned or "document"
+
+
+def derive_document_title(file_name: str) -> str:
+    stem = Path(file_name).stem.strip()
+    normalized = re.sub(r"[_\-]+", " ", stem)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized or "未命名文档"
 
 
 def classify_file_type(file_extension: str) -> str:
@@ -83,6 +92,53 @@ def supports_inline_preview(file_extension: str, mime_type: str) -> bool:
 
 def supports_text_preview(file_extension: str, mime_type: str) -> bool:
     return file_extension.lower() in TEXT_PREVIEW_EXTENSIONS or mime_type.startswith("text/")
+
+
+def extract_page_count_from_tika(file_path: Path) -> int | None:
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return None
+
+    try:
+        from tika import parser  # type: ignore
+
+        parsed = parser.from_file(str(file_path))
+        metadata = parsed.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            return None
+    except Exception:
+        return None
+
+    candidate_keys = (
+        "xmpTPg:NPages",
+        "meta:page-count",
+        "Page-Count",
+        "pdf:docinfo:custom:_dlc_Documents_PageCount",
+    )
+
+    for key in candidate_keys:
+        value = metadata.get(key)
+        if value is None:
+            continue
+        try:
+            page_count = int(str(value).strip())
+        except (TypeError, ValueError):
+            continue
+        if page_count > 0:
+            return page_count
+    return None
+
+
+def estimate_document_page_count(file_path: Path, *, file_extension: str, mime_type: str) -> int | None:
+    normalized_extension = file_extension.lower()
+    if normalized_extension == "pdf":
+        try:
+            from pypdf import PdfReader  # type: ignore
+
+            return len(PdfReader(str(file_path)).pages)
+        except Exception:
+            pass
+
+    return extract_page_count_from_tika(file_path)
 
 
 def parse_specific_usernames(raw_value: str | None) -> list[str]:
@@ -263,6 +319,8 @@ def sync_document_password_access(
     visibility_mode: ResourceVisibility,
     password: str | None,
     password_hint: str | None,
+    password_provided: bool = True,
+    password_hint_provided: bool = True,
 ) -> None:
     stmt = select(AccessPasscode).where(
         AccessPasscode.resource_type == "document",
@@ -276,10 +334,9 @@ def sync_document_password_access(
             db.flush()
         return
 
-    if not password:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码访问模式下必须提供访问密码")
-
     if passcode is None:
+        if not password:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码访问模式下必须提供访问密码")
         passcode = AccessPasscode(
             resource_type="document",
             resource_id=document_id,
@@ -289,8 +346,12 @@ def sync_document_password_access(
         )
         db.add(passcode)
     else:
-        passcode.password_hash = hash_password(password)
-        passcode.hint = password_hint
+        if password_provided:
+            if not password:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码访问模式下必须提供访问密码")
+            passcode.password_hash = hash_password(password)
+        if password_hint_provided:
+            passcode.hint = password_hint
         passcode.is_enabled = True
     db.flush()
 
@@ -300,7 +361,8 @@ def sync_document_specific_users(
     *,
     document_id: UUID,
     visibility_mode: ResourceVisibility,
-    usernames: list[str],
+    usernames: list[str] | None,
+    usernames_provided: bool = True,
 ) -> None:
     delete_stmt = delete(ACLEntry).where(
         ACLEntry.resource_type == "document",
@@ -314,7 +376,20 @@ def sync_document_specific_users(
         db.flush()
         return
 
-    users = resolve_users_by_usernames(db, usernames)
+    if not usernames_provided:
+        acl_count = db.scalar(
+            select(func.count(ACLEntry.id)).where(
+                ACLEntry.resource_type == "document",
+                ACLEntry.resource_id == document_id,
+                ACLEntry.subject_type == ACLSubjectType.USER,
+                ACLEntry.permission_type == ACLPermissionType.VIEW,
+            )
+        )
+        if acl_count:
+            return
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="指定用户可见模式下至少需要一个用户")
+
+    users = resolve_users_by_usernames(db, usernames or [])
     if not users:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="指定用户可见模式下至少需要一个用户")
 
@@ -364,6 +439,18 @@ def award_upload_reward(db: Session, user: User, *, document_id: UUID, document_
     )
     db.flush()
     return account
+
+
+def get_document_page_count(document: Document) -> int | None:
+    original_assets = [asset for asset in document.assets if asset.asset_kind == DocumentAssetKind.ORIGINAL]
+    for asset in original_assets:
+        if asset.page_count:
+            return asset.page_count
+
+    page_count = document.extra_metadata.get("page_count")
+    if isinstance(page_count, int) and page_count > 0:
+        return page_count
+    return None
 
 
 def create_document(
@@ -422,6 +509,7 @@ def create_document(
     storage_path = document_storage_dir / original_file_name
     storage_path.write_bytes(file_content)
     storage_key = storage_path.relative_to(BACKEND_ROOT).as_posix()
+    page_count = estimate_document_page_count(storage_path, file_extension=file_extension, mime_type=mime_type)
 
     version = DocumentVersion(
         document_id=document.id,
@@ -442,7 +530,7 @@ def create_document(
             asset_kind=DocumentAssetKind.ORIGINAL,
             storage_key=storage_key,
             content_type=mime_type,
-            page_count=None,
+            page_count=page_count,
             asset_order=0,
             extra_metadata={"original_file_name": original_file_name},
         )
@@ -450,6 +538,18 @@ def create_document(
     db.flush()
 
     preview_text = extract_preview_text(storage_path, file_extension=file_extension, mime_type=mime_type)
+    generated_summary: str | None = None
+    ai_provider_name: str | None = None
+    if not summary and preview_text:
+        generated_summary, ai_provider_name = maybe_generate_document_summary(
+            db,
+            suggested_title=title,
+            file_name=original_file_name,
+            preview_text=preview_text,
+        )
+        if generated_summary:
+            document.summary = generated_summary
+
     if preview_text:
         preview_text_path = document_storage_dir / "preview.txt"
         preview_text_path.write_text(preview_text, encoding="utf-8")
@@ -467,6 +567,14 @@ def create_document(
             )
         )
         db.flush()
+
+    document.extra_metadata = {
+        **(document.extra_metadata or {}),
+        "original_file_name": original_file_name,
+        "page_count": page_count,
+        "ai_summary_provider": ai_provider_name,
+    }
+    db.flush()
 
     sync_document_password_access(
         db,
@@ -658,6 +766,33 @@ def mark_document_download(
     document.download_count += 1
     db.flush()
     return ensure_document_exists(db, document.id)
+
+
+def delete_document(db: Session, document: Document) -> None:
+    db.execute(
+        delete(ACLEntry).where(
+            ACLEntry.resource_type == "document",
+            ACLEntry.resource_id == document.id,
+        )
+    )
+    db.execute(
+        delete(AccessPasscode).where(
+            AccessPasscode.resource_type == "document",
+            AccessPasscode.resource_id == document.id,
+        )
+    )
+    db.execute(
+        update(CoinLedger)
+        .where(CoinLedger.related_document_id == document.id)
+        .values(related_document_id=None)
+    )
+
+    storage_dir = DOCUMENT_STORAGE_ROOT / str(document.id)
+    db.delete(document)
+    db.flush()
+
+    if storage_dir.exists():
+        shutil.rmtree(storage_dir, ignore_errors=True)
 
 
 def get_document_file_path(document: Document) -> Path:

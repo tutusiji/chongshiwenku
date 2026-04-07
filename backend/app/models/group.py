@@ -19,6 +19,7 @@ class Group(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "groups"
 
     owner_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    parent_group_id: Mapped[UUID | None] = mapped_column(ForeignKey("groups.id", ondelete="SET NULL"), index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     slug: Mapped[str] = mapped_column(String(140), nullable=False, unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -36,6 +37,8 @@ class Group(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     allow_member_invite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     owner: Mapped["User"] = relationship(back_populates="owned_groups")
+    parent_group: Mapped["Group | None"] = relationship(remote_side="Group.id", back_populates="child_groups")
+    child_groups: Mapped[list["Group"]] = relationship(back_populates="parent_group")
     members: Mapped[list["GroupMember"]] = relationship(
         back_populates="group",
         cascade="all, delete-orphan",

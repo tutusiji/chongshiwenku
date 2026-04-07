@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from urllib.parse import quote
 from uuid import UUID
 
@@ -21,16 +22,21 @@ from app.schemas.documents import (
     DocumentListResponse,
     DocumentOwnerResponse,
     DocumentResponse,
+    DocumentUploadAnalyzeResponse,
 )
 from app.services.documents import (
     add_document_like,
+    classify_file_type,
     count_document_likes_for_user,
     count_document_password_enabled,
     create_document,
+    derive_document_title,
     donate_document_coins,
     build_preview_strategy,
     ensure_can_view_document,
     ensure_document_exists,
+    estimate_document_page_count,
+    extract_preview_text,
     get_document_file_path,
     get_document_preview_text_path,
     get_latest_version,
@@ -43,8 +49,10 @@ from app.services.documents import (
     parse_specific_usernames,
     remove_document_like,
     resolve_document_media_type,
+    sanitize_file_name,
     supports_inline_preview,
 )
+from app.services.ai import maybe_generate_document_summary
 
 router = APIRouter()
 
@@ -107,6 +115,66 @@ def build_document_detail_response(db: Session, document: Document, current_user
         inline_preview_supported=supports_inline_preview(document.file_extension, base.mime_type),
         preview_text_available=has_document_preview_text(document),
         preview_strategy=build_preview_strategy(document),
+    )
+
+
+@router.post("/analyze-upload", response_model=DocumentUploadAnalyzeResponse)
+def analyze_document_upload(
+    upload_file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DocumentUploadAnalyzeResponse:
+    del current_user
+
+    original_file_name = sanitize_file_name(upload_file.filename or "document")
+    file_extension = Path(original_file_name).suffix.lstrip(".").lower()
+    mime_type = resolve_document_media_type(original_file_name, upload_file.content_type)
+    file_type = classify_file_type(file_extension)
+    file_content = upload_file.file.read()
+    if not file_content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="上传文件不能为空")
+
+    temp_file_path: Path | None = None
+    try:
+        with NamedTemporaryFile(delete=False, suffix=Path(original_file_name).suffix or "") as temp_file:
+            temp_file.write(file_content)
+            temp_file_path = Path(temp_file.name)
+
+        preview_text = extract_preview_text(temp_file_path, file_extension=file_extension, mime_type=mime_type)
+        page_count = estimate_document_page_count(temp_file_path, file_extension=file_extension, mime_type=mime_type)
+    finally:
+        if temp_file_path is not None:
+            temp_file_path.unlink(missing_ok=True)
+
+    suggested_title = derive_document_title(original_file_name)
+    ai_summary, ai_provider_name = maybe_generate_document_summary(
+        db,
+        suggested_title=suggested_title,
+        file_name=original_file_name,
+        preview_text=preview_text,
+    )
+    db.commit()
+
+    preview_strategy = "download_only"
+    if supports_inline_preview(file_extension, mime_type):
+        preview_strategy = "browser_inline"
+    elif preview_text:
+        preview_strategy = "text"
+
+    return DocumentUploadAnalyzeResponse(
+        file_name=original_file_name,
+        suggested_title=suggested_title,
+        file_type=file_type,
+        mime_type=mime_type,
+        file_extension=file_extension,
+        file_size=len(file_content),
+        page_count=page_count,
+        preview_text_available=bool(preview_text),
+        preview_excerpt=preview_text[:1200] if preview_text else None,
+        ai_summary=ai_summary,
+        ai_provider_name=ai_provider_name,
+        inline_preview_supported=supports_inline_preview(file_extension, mime_type),
+        preview_strategy=preview_strategy,
     )
 
 

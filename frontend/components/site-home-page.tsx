@@ -9,24 +9,10 @@ import {
   InfoCircleOutlined,
   LoginOutlined,
   ReadOutlined,
-  ReloadOutlined,
-  SearchOutlined,
   TeamOutlined,
   UserAddOutlined,
 } from "@ant-design/icons";
-import {
-  Alert,
-  Avatar,
-  Button,
-  Card,
-  Empty,
-  Form,
-  Input,
-  Space,
-  Spin,
-  Tag,
-  Typography,
-} from "antd";
+import { Alert, Avatar, Button, Card, Empty, Space, Spin, Tag, Typography } from "antd";
 import { getStoredAccessToken, requestJson } from "@/lib/api";
 import { DocumentListResponse, DocumentSummary, formatFileSize, previewStatusLabelMap } from "@/lib/documents";
 import { visibilityLabelMap } from "@/lib/groups";
@@ -34,10 +20,6 @@ import { visibilityLabelMap } from "@/lib/groups";
 type SiteHomePageProps = {
   initialDocuments?: DocumentSummary[];
   initialError?: string | null;
-};
-
-type HomeSearchValues = {
-  keyword?: string;
 };
 
 const defaultCategories = ["全部", "考研", "课件", "教育", "法律", "财经", "AI", "医学", "报告", "文档"];
@@ -91,7 +73,6 @@ function sortByReadCount(items: DocumentSummary[]): DocumentSummary[] {
 }
 
 export function SiteHomePage({ initialDocuments = [], initialError = null }: SiteHomePageProps) {
-  const [searchForm] = Form.useForm<HomeSearchValues>();
   const [documents, setDocuments] = useState<DocumentSummary[]>(initialDocuments);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
@@ -159,66 +140,13 @@ export function SiteHomePage({ initialDocuments = [], initialError = null }: Sit
     return Array.from(grouped.entries()).slice(0, 3);
   }, [documents]);
 
-  const handleSearch = async (values: HomeSearchValues) => {
-    await loadDocuments(values.keyword ?? "", activeCategory);
-  };
-
   const handleCategoryChange = async (category: string) => {
     setActiveCategory(category);
-    await loadDocuments(searchForm.getFieldValue("keyword") ?? "", category);
+    await loadDocuments("", category);
   };
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] text-ink">
-      <section className="border-b border-[#dbe5f2] bg-white/92">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3 text-sm text-[#52637c] md:px-8">
-          <div>崇实文库正在建设中：公开文档、资料组协作、积分激励已进入首版可体验阶段。</div>
-          <Space size={12}>
-            <a href="/about">功能介绍</a>
-            <a href="/auth/login">登录</a>
-            <a href="/auth/register">注册</a>
-          </Space>
-        </div>
-      </section>
-
-      <header className="border-b border-[#d8e1ef] bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 md:px-8 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2a7de1] text-2xl font-semibold text-white">
-              崇
-            </div>
-            <div>
-              <Typography.Title level={2} className="!mb-1 !text-3xl !font-semibold !text-[#15304b]">
-                崇实文库
-              </Typography.Title>
-              <Typography.Paragraph className="!mb-0 !text-sm !text-[#667892]">
-                面向学习、课件与资料沉淀的多用户文档知识平台
-              </Typography.Paragraph>
-            </div>
-          </div>
-
-          <div className="flex flex-1 items-center justify-end">
-            <Form<HomeSearchValues> form={searchForm} className="w-full max-w-3xl" onFinish={handleSearch}>
-              <div className="flex gap-3">
-                <Form.Item name="keyword" className="!mb-0 flex-1">
-                  <Input
-                    size="large"
-                    placeholder="搜索公开文档标题、摘要或分类"
-                    prefix={<SearchOutlined className="text-[#7a8ba5]" />}
-                  />
-                </Form.Item>
-                <Button type="primary" htmlType="submit" size="large" loading={loading}>
-                  搜索
-                </Button>
-                <Button size="large" icon={<ReloadOutlined />} onClick={() => void loadDocuments(searchForm.getFieldValue("keyword") ?? "", activeCategory)}>
-                  刷新
-                </Button>
-              </div>
-            </Form>
-          </div>
-        </div>
-      </header>
-
       <section className="bg-[#235ca8] text-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-7 gap-y-3 px-5 py-4 md:px-8">
           {categoryOptions.slice(0, 10).map((category) => (
@@ -405,8 +333,8 @@ export function SiteHomePage({ initialDocuments = [], initialError = null }: Sit
                     </div>
                     <div className="flex items-center justify-between">
                       <Space size={8}>
-                        <Avatar size="small">{document.owner.nickname.slice(0, 1)}</Avatar>
-                        <span className="text-sm text-[#667892]">{document.owner.nickname}</span>
+                        <Avatar size="small">{document.owner.username.slice(0, 1).toUpperCase()}</Avatar>
+                        <span className="text-sm text-[#667892]">{document.owner.username}</span>
                       </Space>
                       <Button type="link" href={`/documents/${document.id}`} className="!px-0">
                         查看详情
@@ -439,7 +367,7 @@ export function SiteHomePage({ initialDocuments = [], initialError = null }: Sit
                         {document.summary || "上传者暂未填写摘要。"}
                       </Typography.Paragraph>
                       <div className="text-sm text-[#6c7f98]">
-                        {document.owner.nickname} · {formatFileSize(document.file_size)} · {new Date(document.created_at).toLocaleDateString("zh-CN")}
+                        {document.owner.username} · {formatFileSize(document.file_size)} · {new Date(document.created_at).toLocaleDateString("zh-CN")}
                       </div>
                     </div>
                   ))}

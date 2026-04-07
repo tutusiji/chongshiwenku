@@ -67,3 +67,19 @@ class DocumentCoinResponse(BaseModel):
     document_coin_count: int
     owner_balance: int
     message: str
+
+
+class DocumentUploadAnalyzeResponse(BaseModel):
+    file_name: str
+    suggested_title: str
+    file_type: str
+    mime_type: str
+    file_extension: str
+    file_size: int
+    page_count: int | None
+    preview_text_available: bool
+    preview_excerpt: str | None
+    ai_summary: str | None
+    ai_provider_name: str | None
+    inline_preview_supported: bool
+    preview_strategy: str
