@@ -27,6 +27,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Segmented,
   Space,
   Spin,
   Tag,
@@ -56,11 +57,35 @@ type CoinFormValues = {
   coinAmount: number;
 };
 
+type PreviewViewMode = "original" | "text";
+
+type PreviewBlock =
+  | {
+      kind: "heading";
+      text: string;
+      level: 2 | 3;
+    }
+  | {
+      kind: "list";
+      items: string[];
+      ordered: boolean;
+    }
+  | {
+      kind: "table";
+      rows: string[][];
+    }
+  | {
+      kind: "paragraph";
+      text: string;
+    };
+
 const previewModeLabelMap: Record<DocumentDetail["preview_strategy"], string> = {
   browser_inline: "页内原文件预览",
   text: "页内文本预览",
   download_only: "仅支持下载查看",
 };
+
+const previewViewportClassName = "h-[72vh] min-h-[520px] md:min-h-[680px]";
 
 function buildAccessQuery(accessPassword: string | null): string {
   if (!accessPassword) {
@@ -88,14 +113,143 @@ function formatDateTime(value: string): string {
   });
 }
 
-function buildPreviewHint(detail: DocumentDetail): string {
-  if (detail.preview_strategy === "browser_inline") {
-    return "系统已直接加载原文件，可在当前页滚动预览内容。";
-  }
+function hasOriginalPreview(detail: DocumentDetail): boolean {
+  return detail.preview_strategy === "browser_inline";
+}
+
+function hasTextPreview(detail: DocumentDetail): boolean {
+  return detail.preview_text_available;
+}
+
+function getDefaultPreviewViewMode(detail: DocumentDetail): PreviewViewMode {
   if (detail.preview_strategy === "text") {
-    return "系统已提取正文文本，当前阅读区展示的是可直接浏览的内容摘要。";
+    return "text";
   }
-  return "当前文件暂不支持页内展示，可使用右侧下载按钮查看原文。";
+  return "original";
+}
+
+function buildPreviewModeOptions(detail: DocumentDetail): Array<{ label: string; value: PreviewViewMode }> {
+  const options: Array<{ label: string; value: PreviewViewMode }> = [];
+
+  if (hasOriginalPreview(detail)) {
+    options.push({
+      label: "原文预览",
+      value: "original",
+    });
+  }
+
+  if (hasTextPreview(detail)) {
+    options.push({
+      label: "文本模式",
+      value: "text",
+    });
+  }
+
+  return options;
+}
+
+function isPdfPreview(contentType: string | null, fileExtension: string): boolean {
+  return (contentType ?? "").includes("pdf") || fileExtension.toLowerCase() === "pdf";
+}
+
+function buildPreviewHint(detail: DocumentDetail, mode: PreviewViewMode): string {
+  if (mode === "text") {
+    if (detail.file_type === "spreadsheet") {
+      return "当前展示的是结构化文本预览，适合快速浏览表格内容并复制关键数据。";
+    }
+    return "当前展示的是提取后的正文文本，适合连续阅读、搜索关键词和复制内容。";
+  }
+
+  if (isPdfPreview(detail.mime_type, detail.file_extension)) {
+    return detail.preview_text_available
+      ? "当前展示的是 PDF 原件，若浏览器兼容性不佳，可切换到文本模式继续阅读。"
+      : "系统已直接加载 PDF 原件，可在当前页滚动查看完整内容。";
+  }
+
+  if (detail.mime_type.startsWith("image/")) {
+    return "系统已直接加载原始图片内容，可在当前页查看高清预览。";
+  }
+
+  return "系统已直接加载原文件，可在当前页滚动预览内容。";
+}
+
+function parsePreviewTableRow(line: string): string[] | null {
+  const normalizedLine = line.trim();
+  if (!normalizedLine) {
+    return null;
+  }
+
+  const hasTabs = normalizedLine.includes("\t");
+  const hasWideSpaces = /\S\s{2,}\S/.test(normalizedLine);
+  if (!hasTabs && !hasWideSpaces) {
+    return null;
+  }
+
+  const cells = (hasTabs ? normalizedLine.split(/\t+/) : normalizedLine.split(/\s{2,}/))
+    .map((cell) => cell.trim())
+    .filter(Boolean);
+
+  return cells.length >= 2 ? cells : null;
+}
+
+function buildPreviewBlocks(text: string): PreviewBlock[] {
+  const rawBlocks = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\u0000/g, "")
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return rawBlocks.map((block) => {
+    const lines = block
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const parsedRows = lines
+      .map((line) => parsePreviewTableRow(line))
+      .filter((row): row is string[] => Array.isArray(row));
+
+    if (parsedRows.length >= 2) {
+      const columnCount = parsedRows[0].length;
+      if (parsedRows.every((row) => row.length === columnCount)) {
+        return {
+          kind: "table",
+          rows: parsedRows,
+        };
+      }
+    }
+
+    if (lines.length >= 2 && lines.every((line) => /^\d+[\.\u3001\uff0e)]\s*/.test(line))) {
+      return {
+        kind: "list",
+        ordered: true,
+        items: lines.map((line) => line.replace(/^\d+[\.\u3001\uff0e)]\s*/, "")),
+      };
+    }
+
+    if (lines.length >= 2 && lines.every((line) => /^[-*•·]\s*/.test(line))) {
+      return {
+        kind: "list",
+        ordered: false,
+        items: lines.map((line) => line.replace(/^[-*•·]\s*/, "")),
+      };
+    }
+
+    const headingText = lines.join(" ");
+    if (lines.length <= 2 && headingText.length <= 32 && !/[。；！？,.]/.test(headingText)) {
+      return {
+        kind: "heading",
+        text: headingText,
+        level: headingText.length <= 14 ? 2 : 3,
+      };
+    }
+
+    return {
+      kind: "paragraph",
+      text: lines.join("\n"),
+    };
+  });
 }
 
 async function fetchDiscoverDocuments(
@@ -124,9 +278,11 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
   const [accessPassword, setAccessPassword] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewNotice, setPreviewNotice] = useState<string | null>(null);
   const [previewText, setPreviewText] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewContentType, setPreviewContentType] = useState<string | null>(null);
+  const [previewViewMode, setPreviewViewMode] = useState<PreviewViewMode>("original");
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [relatedError, setRelatedError] = useState<string | null>(null);
@@ -199,6 +355,18 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
 
   useEffect(() => {
     if (!detail || accessRequired) {
+      setPreviewNotice(null);
+      setPreviewViewMode("original");
+      return;
+    }
+
+    setPreviewNotice(null);
+    setPreviewViewMode(getDefaultPreviewViewMode(detail));
+  }, [accessRequired, detail?.id, detail?.preview_strategy]);
+
+  useEffect(() => {
+    if (!detail || accessRequired) {
+      setPreviewNotice(null);
       setPreviewError(null);
       setPreviewText(null);
       setPreviewContentType(null);
@@ -216,6 +384,9 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
 
     const loadPreview = async () => {
       const token = getStoredAccessToken();
+      const canUseOriginalPreview = hasOriginalPreview(detail);
+      const canUseTextPreview = hasTextPreview(detail);
+
       setPreviewLoading(true);
       setPreviewError(null);
       setPreviewText(null);
@@ -228,7 +399,18 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
       });
 
       try {
-        if (detail.preview_strategy === "browser_inline") {
+        if (previewViewMode === "original") {
+          if (!canUseOriginalPreview) {
+            if (canUseTextPreview) {
+              setPreviewNotice("当前文件没有稳定的原文页内预览，已自动切换到文本模式。");
+              setPreviewViewMode("text");
+              return;
+            }
+
+            setPreviewError("当前文档暂不支持页内预览，请使用下载按钮查看原文件。");
+            return;
+          }
+
           const response = await fetch(
             `${apiBaseUrl}/documents/${documentId}/file?inline=true${accessPassword ? `&access_password=${encodeURIComponent(accessPassword)}` : ""}`,
             {
@@ -265,7 +447,18 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
           return;
         }
 
-        if (detail.preview_strategy === "text" && detail.preview_text_available) {
+        if (previewViewMode === "text") {
+          if (!canUseTextPreview) {
+            if (canUseOriginalPreview) {
+              setPreviewNotice("当前文件没有可用的文本内容，已自动切换到原文模式。");
+              setPreviewViewMode("original");
+              return;
+            }
+
+            setPreviewError("当前文档暂未生成文本预览，请使用下载按钮查看原文件。");
+            return;
+          }
+
           const response = await fetch(
             `${apiBaseUrl}/documents/${documentId}/preview-text${accessPassword ? `?access_password=${encodeURIComponent(accessPassword)}` : ""}`,
             {
@@ -304,6 +497,19 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
         if (!active) {
           return;
         }
+
+        if (previewViewMode === "original" && canUseTextPreview) {
+          setPreviewNotice("原文预览加载失败，已自动切换到文本模式继续阅读。");
+          setPreviewViewMode("text");
+          return;
+        }
+
+        if (previewViewMode === "text" && canUseOriginalPreview) {
+          setPreviewNotice("文本模式加载失败，已自动切换到原文模式继续阅读。");
+          setPreviewViewMode("original");
+          return;
+        }
+
         setPreviewError(requestError instanceof Error ? requestError.message : "文档内容加载失败");
       } finally {
         if (active) {
@@ -330,6 +536,7 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
     detail?.preview_strategy,
     detail?.preview_text_available,
     documentId,
+    previewViewMode,
   ]);
 
   useEffect(() => {
@@ -494,6 +701,9 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
     }
   };
 
+  const previewModeOptions = detail ? buildPreviewModeOptions(detail) : [];
+  const previewBlocks = previewText ? buildPreviewBlocks(previewText) : [];
+
   return (
     <main className="min-h-screen bg-[#eef2f7] text-[#17314c]">
       {contextHolder}
@@ -628,11 +838,27 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e6edf7] bg-[#f7faff] px-5 py-4">
-                  <Space wrap size={[8, 8]}>
-                    <Tag color="processing">{previewModeLabelMap[detail.preview_strategy]}</Tag>
-                    <Tag color="default">{detail.mime_type}</Tag>
-                    <span className="text-sm text-[#667b95]">{buildPreviewHint(detail)}</span>
-                  </Space>
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+                    <Space wrap size={[8, 8]}>
+                      <Tag color="processing">{previewModeLabelMap[detail.preview_strategy]}</Tag>
+                      <Tag color={previewViewMode === "original" ? "blue" : "cyan"}>
+                        当前: {previewViewMode === "original" ? "原文模式" : "文本模式"}
+                      </Tag>
+                      <Tag color="default">{detail.mime_type}</Tag>
+                    </Space>
+                    {previewModeOptions.length > 1 ? (
+                      <Segmented
+                        size="middle"
+                        options={previewModeOptions}
+                        value={previewViewMode}
+                        onChange={(value) => {
+                          setPreviewNotice(null);
+                          setPreviewViewMode(value as PreviewViewMode);
+                        }}
+                      />
+                    ) : null}
+                    <span className="text-sm text-[#667b95]">{buildPreviewHint(detail, previewViewMode)}</span>
+                  </div>
                   <Space wrap size={[8, 8]}>
                     <Button
                       icon={<ReloadOutlined />}
@@ -657,15 +883,26 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
                   ref={previewContainerRef}
                   className="bg-[linear-gradient(180deg,#f4f7fb_0%,#eef3f9_100%)] p-4 md:p-6"
                 >
+                  {previewNotice ? (
+                    <Alert
+                      className="mb-4"
+                      type="info"
+                      showIcon
+                      closable
+                      message={previewNotice}
+                      onClose={() => setPreviewNotice(null)}
+                    />
+                  ) : null}
+
                   {previewLoading ? (
-                    <div className="flex h-[78vh] min-h-[760px] items-center justify-center rounded-[26px] border border-[#dae5f3] bg-white">
+                    <div className={`flex ${previewViewportClassName} items-center justify-center rounded-[26px] border border-[#dae5f3] bg-white`}>
                       <Space direction="vertical" size={18} align="center">
                         <Spin size="large" />
                         <Typography.Text className="text-[#5f7390]">正在加载文档预览内容...</Typography.Text>
                       </Space>
                     </div>
                   ) : previewError ? (
-                    <div className="flex h-[78vh] min-h-[760px] items-center rounded-[26px] border border-[#dae5f3] bg-white p-6">
+                    <div className={`flex ${previewViewportClassName} items-center rounded-[26px] border border-[#dae5f3] bg-white p-6`}>
                       <Alert
                         type="info"
                         showIcon
@@ -679,40 +916,160 @@ export function DocumentDetailPanel({ documentId }: DocumentDetailPanelProps) {
                     </div>
                   ) : previewUrl ? (
                     previewContentType?.startsWith("image/") ? (
-                      <div className="flex h-[78vh] min-h-[760px] items-center justify-center rounded-[26px] border border-[#dbe4f1] bg-[#0f172a] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div
+                        className={`flex ${previewViewportClassName} items-center justify-center rounded-[26px] border border-[#dbe4f1] bg-[#0f172a] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]`}
+                      >
                         <img
                           src={previewUrl}
                           alt={detail.title}
                           className="max-h-full w-auto max-w-full rounded-[18px] object-contain"
                         />
                       </div>
+                    ) : isPdfPreview(previewContentType, detail.file_extension) ? (
+                      <div className="overflow-hidden rounded-[26px] border border-[#dbe4f1] bg-white shadow-[0_26px_60px_rgba(15,23,42,0.08)]">
+                        <object
+                          data={previewUrl}
+                          type={previewContentType ?? "application/pdf"}
+                          className={`${previewViewportClassName} w-full bg-white`}
+                        >
+                          <div className={`flex ${previewViewportClassName} items-center rounded-[26px] bg-white p-6`}>
+                            <Alert
+                              type="info"
+                              showIcon
+                              message="当前浏览器未能直接渲染 PDF，可切换到文本模式继续阅读，或在新窗口打开原文。"
+                              action={
+                                <Space size={8}>
+                                  {detail.preview_text_available ? (
+                                    <Button
+                                      size="small"
+                                      onClick={() => {
+                                        setPreviewNotice(null);
+                                        setPreviewViewMode("text");
+                                      }}
+                                    >
+                                      切换文本模式
+                                    </Button>
+                                  ) : null}
+                                  <Button size="small" onClick={() => void handleOpenFile(true)}>
+                                    新窗口打开
+                                  </Button>
+                                </Space>
+                              }
+                            />
+                          </div>
+                        </object>
+                      </div>
                     ) : (
                       <div className="overflow-hidden rounded-[26px] border border-[#dbe4f1] bg-white shadow-[0_26px_60px_rgba(15,23,42,0.08)]">
                         <iframe
                           title={`${detail.title}-preview`}
                           src={previewUrl}
-                          className="h-[78vh] min-h-[760px] w-full bg-white"
+                          className={`${previewViewportClassName} w-full bg-white`}
                         />
                       </div>
                     )
                   ) : previewText ? (
-                    <div className="h-[78vh] min-h-[760px] overflow-auto rounded-[26px] border border-[#dbe4f1] bg-[#edf2f8] p-4 md:p-6">
+                    <div className={`${previewViewportClassName} overflow-auto rounded-[26px] border border-[#dbe4f1] bg-[#edf2f8] p-4 md:p-6`}>
                       <div className="mx-auto max-w-4xl rounded-[20px] border border-[#e5ebf4] bg-white px-6 py-8 shadow-[0_24px_50px_rgba(15,23,42,0.08)] md:px-10 md:py-10">
                         <div className="mb-8 border-b border-[#edf2f8] pb-6">
                           <Typography.Title level={2} className="!mb-3 !text-center !text-4xl !leading-tight !text-[#1957d2]">
                             {detail.title}
                           </Typography.Title>
                           <Typography.Paragraph className="!mb-0 !text-center !text-sm !leading-7 !text-[#7386a0]">
-                            当前阅读区展示的是系统自动抽取的正文内容，适合 Word、TXT、CSV 等文档直接在线浏览。
+                            当前阅读区展示的是系统自动抽取并整理后的正文内容，更适合连续阅读、搜索和复制。
                           </Typography.Paragraph>
                         </div>
-                        <pre className="m-0 whitespace-pre-wrap break-words font-serif text-[17px] leading-9 text-[#21364f]">
-                          {previewText}
-                        </pre>
+                        <div className="space-y-6">
+                          {previewBlocks.length > 0 ? (
+                            previewBlocks.map((block, index) => {
+                              if (block.kind === "heading") {
+                                return (
+                                  <Typography.Title
+                                    key={`${block.kind}-${index}`}
+                                    level={block.level === 2 ? 3 : 4}
+                                    className="!mb-0 !text-[#17314c]"
+                                  >
+                                    {block.text}
+                                  </Typography.Title>
+                                );
+                              }
+
+                              if (block.kind === "list") {
+                                const ListTag = block.ordered ? "ol" : "ul";
+                                return (
+                                  <ListTag
+                                    key={`${block.kind}-${index}`}
+                                    className="m-0 space-y-2 pl-6 font-serif text-[17px] leading-9 text-[#21364f]"
+                                  >
+                                    {block.items.map((item, itemIndex) => (
+                                      <li key={`${block.kind}-${index}-${itemIndex}`}>{item}</li>
+                                    ))}
+                                  </ListTag>
+                                );
+                              }
+
+                              if (block.kind === "table") {
+                                const [headerRow, ...bodyRows] = block.rows;
+                                const useHeader = detail.file_type === "spreadsheet" && bodyRows.length > 0;
+
+                                return (
+                                  <div
+                                    key={`${block.kind}-${index}`}
+                                    className="overflow-x-auto rounded-[18px] border border-[#dbe4f1] bg-[#fbfdff]"
+                                  >
+                                    <table className="min-w-full border-collapse text-left text-sm text-[#21364f]">
+                                      {useHeader ? (
+                                        <thead className="bg-[#eef4ff] text-[#17314c]">
+                                          <tr>
+                                            {headerRow.map((cell, cellIndex) => (
+                                              <th
+                                                key={`${block.kind}-${index}-head-${cellIndex}`}
+                                                className="border-b border-[#dbe4f1] px-4 py-3 font-semibold"
+                                              >
+                                                {cell}
+                                              </th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                      ) : null}
+                                      <tbody>
+                                        {(useHeader ? bodyRows : block.rows).map((row, rowIndex) => (
+                                          <tr key={`${block.kind}-${index}-row-${rowIndex}`} className="odd:bg-white even:bg-[#f8fbff]">
+                                            {row.map((cell, cellIndex) => (
+                                              <td
+                                                key={`${block.kind}-${index}-row-${rowIndex}-cell-${cellIndex}`}
+                                                className="border-b border-[#e8eef7] px-4 py-3 align-top leading-7"
+                                              >
+                                                {cell}
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <Typography.Paragraph
+                                  key={`${block.kind}-${index}`}
+                                  className="!mb-0 whitespace-pre-wrap break-words font-serif !text-[17px] !leading-9 !text-[#21364f]"
+                                >
+                                  {block.text}
+                                </Typography.Paragraph>
+                              );
+                            })
+                          ) : (
+                            <Typography.Paragraph className="!mb-0 whitespace-pre-wrap break-words font-serif !text-[17px] !leading-9 !text-[#21364f]">
+                              {previewText}
+                            </Typography.Paragraph>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex h-[78vh] min-h-[760px] items-center justify-center rounded-[26px] border border-[#dae5f3] bg-white">
+                    <div className={`flex ${previewViewportClassName} items-center justify-center rounded-[26px] border border-[#dae5f3] bg-white`}>
                       <Empty description="当前文档暂未生成可直接展示的内容预览。" />
                     </div>
                   )}
